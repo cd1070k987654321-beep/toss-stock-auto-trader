@@ -20,6 +20,24 @@ function validateOrderInput({ symbol, quantity = '1', price, orderType = 'MARKET
   }
 }
 
+function toMinutes(time) {
+  const [hours, minutes] = String(time).split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+function currentSeoulMinutes() {
+  const parts = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date())
+
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value || 0)
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value || 0)
+  return hour * 60 + minute
+}
+
 export class TradingBotEngine {
   constructor() {
     this.client = new TossClient({
@@ -66,6 +84,43 @@ export class TradingBotEngine {
       const score = Math.min(99, Math.max(1, row.score + (index === 0 ? 1 : 0)))
       update.run(price, changeRate, volume, tradingValue, score, row.symbol)
     })
+  }
+
+  async tick(nowMinutes = currentSeoulMinutes()) {
+    const status = this.getStatus()
+    const strategy = db.prepare('SELECT * FROM strategy WHERE id = 1').get()
+    const scanStart = toMinutes(strategy.scanStart)
+    const scanEnd = toMinutes(strategy.scanEnd)
+    const forceSell = toMinutes(strategy.forceSellTime)
+
+    if (!status.isRunning) {
+      return { action: 'idle', status, reason: 'bot-off' }
+    }
+
+    if (nowMinutes >= scanStart && nowMinutes < scanEnd && status.phase === 'waiting') {
+      const next = this.start()
+      return { action: 'scan-started', status: next }
+    }
+
+    if (nowMinutes >= scanEnd && nowMinutes < forceSell && status.phase === 'scanning') {
+      const top = db.prepare('SELECT * FROM candidates ORDER BY score DESC, tradingValue DESC LIMIT 1').get()
+      const result = await this.buy({ symbol: top.symbol, quantity: '1', orderType: 'MARKET' })
+      db.prepare("UPDATE bot_status SET phase = 'watching', currentSymbol = ? WHERE id = 1").run(top.symbol)
+      addLog(`자동 매수 흐름 실행: ${top.name}`)
+      return { action: 'auto-buy-requested', symbol: top.symbol, result, status: this.getStatus() }
+    }
+
+    if (nowMinutes >= forceSell && status.currentSymbol) {
+      const result = await this.emergencySell()
+      return { action: 'force-sell-requested', result, status: this.getStatus() }
+    }
+
+    if (status.phase === 'scanning') {
+      this.refreshCandidates()
+      return { action: 'scan-refreshed', status: this.getStatus() }
+    }
+
+    return { action: 'no-op', status: this.getStatus() }
   }
 
   async getAccounts() {

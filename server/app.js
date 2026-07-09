@@ -44,6 +44,14 @@ app.post('/api/bot/stop', (_request, response) => {
   response.json(bot.stop())
 })
 
+app.post('/api/bot/tick', async (_request, response) => {
+  try {
+    response.json(await bot.tick())
+  } catch (error) {
+    response.status(400).json({ message: error.message })
+  }
+})
+
 app.get('/api/strategy', (_request, response) => {
   response.json(db.prepare('SELECT * FROM strategy WHERE id = 1').get())
 })

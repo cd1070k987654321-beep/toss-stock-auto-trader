@@ -66,3 +66,33 @@ https://toss-stock-auto-trader-deploy.vercel.app/
 - 배포본은 `TOSS_TRADING_MODE=test`로 동작합니다.
 - Vercel 서버리스는 장시간 실행되는 자동매매 봇과 영구 SQLite 저장소에는 적합하지 않습니다.
 - 실전 자동매매 운영은 Render/Railway/Fly 같은 상시 실행 서버에 환경변수를 넣어 배포해야 합니다.
+
+## 무료 Render 실사용 운영
+
+Render Free Web Service는 idle 시 sleep 되므로, 무료 외부 cron으로 아래 엔드포인트를 1분 또는 5분마다 호출합니다.
+
+```text
+POST https://YOUR_RENDER_URL/api/bot/tick
+```
+
+`tick`은 서버 내부에서 한국 시간 기준으로 전략 시간을 판단합니다.
+
+- 09:00~09:10: 스캔 시작/후보 갱신
+- 09:10 이후: 1등 후보 자동 매수 요청
+- 14:50 이후: 보유 종목 강제 매도 요청
+
+무료 cron 예:
+
+- cron-job.org
+- EasyCron free plan
+
+Render 환경변수에는 아래 값을 직접 넣어야 합니다.
+
+```text
+TOSS_TRADING_MODE=live
+TOSS_LIVE_ORDER_ENABLED=true
+TOSS_CLIENT_ID=...
+TOSS_CLIENT_SECRET=...
+TOSS_API_BASE_URL=https://openapi.tossinvest.com
+TOSS_ACCOUNT_SEQ=...
+```
