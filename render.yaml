@@ -1,16 +1,12 @@
 services:
   - type: web
     name: toss-stock-auto-trader
-    env: docker
-    plan: starter
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
     healthCheckPath: /health
-    disk:
-      name: trading-data
-      mountPath: /app/data
-      sizeGB: 1
     envVars:
-      - key: PORT
-        value: 4000
       - key: TOSS_TRADING_MODE
         value: test
       - key: TOSS_LIVE_ORDER_ENABLED
